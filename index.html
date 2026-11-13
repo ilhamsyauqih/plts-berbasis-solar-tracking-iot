@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Solar Tracker Monitor & Kontrol</title>
+<style>
+  :root { --bg:#f4f7f5; --card:#ffffff; --text:#14231a; --muted:#5d6f64; --line:#dbe5de; --accent:#1e8449; --warn:#d68910; --bad:#c0392b; --btn:#eef4f0; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#0f1713; --card:#17221c; --text:#e6f0ea; --muted:#8fa399; --line:#26362d; --accent:#3ddc84; --warn:#f5b041; --bad:#ec7063; --btn:#1f2e26; }
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { margin:0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background:var(--bg); color:var(--text); }
+  header { display:flex; justify-content:space-between; align-items:center; padding:16px 20px; flex-wrap:wrap; gap:8px; max-width:1100px; margin:auto; }
+  h1 { font-size:1.25rem; margin:0; }
+  .badges { display:flex; gap:8px; flex-wrap:wrap; }
+  .badge { padding:6px 12px; border-radius:999px; font-size:.85rem; font-weight:600; background:var(--line); color:var(--muted); }
+  .badge.on { background:var(--accent); color:#fff; } .badge.off { background:var(--bad); color:#fff; } .badge.man { background:var(--warn); color:#fff; }
+  main { padding:0 20px 24px; display:grid; gap:14px; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); max-width:1100px; margin:auto; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px; }
+  .card h2 { margin:0 0 8px; font-size:.8rem; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }
+  .big { font-size:2rem; font-weight:700; } .unit { font-size:1rem; color:var(--muted); margin-left:4px; }
+  .sub { color:var(--muted); font-size:.85rem; margin-top:4px; }
+  .wide { grid-column:1 / -1; }
+  .ldr-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .ldr { background:var(--bg); border-radius:10px; padding:10px; }
+  .ldr b { display:block; font-size:.75rem; color:var(--muted); }
+  .bar { height:8px; border-radius:4px; background:var(--line); margin-top:6px; overflow:hidden; }
+  .bar i { display:block; height:100%; width:0; background:var(--accent); transition:width .4s; }
+  canvas#chart { width:100% !important; max-height:260px; }
+
+  /* ---------- panel kontrol ---------- */
+  .modes { display:inline-flex; border:1px solid var(--line); border-radius:12px; overflow:hidden; }
+  .modes button { border:0; background:var(--btn); color:var(--text); padding:10px 22px; font-size:.95rem; font-weight:600; cursor:pointer; }
+  .modes button.active { background:var(--accent); color:#fff; }
+  .ctrl-row { display:flex; flex-wrap:wrap; gap:28px; align-items:center; justify-content:center; margin-top:16px; }
+  .ctrl-row.dis { opacity:.4; pointer-events:none; }
+  #pad { width:170px; height:170px; border-radius:50%; background:var(--bg); border:2px solid var(--line); position:relative; touch-action:none; cursor:grab; }
+  #pad::before, #pad::after { content:""; position:absolute; background:var(--line); }
+  #pad::before { left:50%; top:8%; width:1px; height:84%; } #pad::after { top:50%; left:8%; height:1px; width:84%; }
+  #knob { width:60px; height:60px; border-radius:50%; background:var(--accent); position:absolute; left:55px; top:55px; box-shadow:0 2px 8px rgba(0,0,0,.3); }
+  .dpad { display:grid; grid-template-columns:repeat(3,56px); grid-template-rows:repeat(3,56px); gap:6px; }
+  .dpad button { border:1px solid var(--line); background:var(--btn); color:var(--text); border-radius:12px; font-size:1.4rem; cursor:pointer; touch-action:none; user-select:none; }
+  .dpad button:active { background:var(--accent); color:#fff; }
+  .opts { display:flex; flex-direction:column; gap:10px; font-size:.9rem; }
+  .opts select { padding:6px; border-radius:8px; border:1px solid var(--line); background:var(--btn); color:var(--text); }
+  .opts label { display:flex; gap:6px; align-items:center; }
+  .opts button { padding:8px 12px; border-radius:10px; border:1px solid var(--line); background:var(--btn); color:var(--text); cursor:pointer; }
+  .readout { text-align:center; margin-top:12px; font-size:.95rem; }
+  .hctl { display:flex; flex-wrap:wrap; gap:12px; align-items:center; margin-bottom:12px; font-size:.9rem; }
+  .hctl select, .hctl button { padding:7px 10px; border-radius:10px; border:1px solid var(--line); background:var(--btn); color:var(--text); cursor:pointer; font-size:.9rem; }
+  .hctl button.danger { color:var(--bad); }
+  .hstats { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:10px; margin:12px 0; }
+  .hstats div { background:var(--bg); border-radius:10px; padding:10px; } .hstats b { display:block; font-size:1.15rem; } .hstats span { font-size:.72rem; color:var(--muted); }
+  .tscroll { overflow-x:auto; } table.h { width:100%; border-collapse:collapse; font-size:.82rem; }
+  table.h th, table.h td { padding:6px 8px; border-bottom:1px solid var(--line); text-align:right; white-space:nowrap; } table.h th:first-child, table.h td:first-child { text-align:left; }
+  table.h th { color:var(--muted); font-weight:600; }
+  .cal { display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:center; margin-top:12px; font-size:.9rem; }
+  .cal input { width:90px; padding:7px 10px; border-radius:10px; border:1px solid var(--line); background:var(--btn); color:var(--text); font-size:.9rem; }
+  .cal button { padding:7px 12px; border-radius:10px; border:1px solid var(--line); background:var(--btn); color:var(--text); cursor:pointer; font-size:.9rem; }
+  .cal button.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .pgrid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:16px; }
+  .hint { text-align:center; color:var(--muted); font-size:.8rem; margin-top:6px; }
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+</head>
+<body>
+<header>
+  <h1>☀️ Solar Tracker – Monitor & Kontrol</h1>
+  <div class="badges"><span id="modeBadge" class="badge">Mode –</span><span id="status" class="badge">Menunggu data…</span></div>
+</header>
+<main>
+  <div class="card"><h2>Cahaya Rata-rata</h2><div><span class="big" id="light">–</span><span class="unit">%</span></div><div class="bar"><i id="b_light"></i></div><div class="sub">Rata-rata 4 sensor LDR</div></div>
+  <div class="card"><h2>Status Tracking</h2><div class="big" id="status2" style="font-size:1.3rem">–</div><div class="sub" id="diff">Selisih atas-bawah – | kiri-kanan –</div></div>
+  <div class="card"><h2>Posisi Servo (aktual)</h2><div class="sub">Pan (horizontal)</div><div><span class="big" id="az">–</span><span class="unit">°</span></div><div class="sub">Tilt (vertikal)</div><div><span class="big" id="el">–</span><span class="unit">°</span></div></div>
+  <div class="card"><h2>Koneksi</h2><div><span class="big" id="rssi">–</span><span class="unit">dBm</span></div><div class="sub" id="uptime">Uptime –</div><div class="sub" id="last">Update terakhir –</div></div>
+
+  <div class="card wide">
+    <h2 id="powTitle">Estimasi Daya Masuk dari Panel Surya</h2>
+    <div class="pgrid">
+      <div><div class="sub">Daya estimasi</div><div><span class="big" id="pest">–</span><span class="unit">W</span></div><div class="bar"><i id="b_pest"></i></div><div class="sub" id="pmax">dari puncak – W</div></div>
+      <div><div class="sub">Keselarasan panel</div><div><span class="big" id="align">–</span><span class="unit">%</span></div><div class="bar"><i id="b_align"></i></div><div class="sub">Makin sejajar dengan cahaya, makin besar</div></div>
+      <div><div class="sub">Energi estimasi</div><div><span class="big" id="ewh">–</span><span class="unit">Wh</span></div><div class="sub">Terkumpul sejak ESP32 menyala</div></div>
+    </div>
+    <div class="cal">
+      <span>Kalibrasi dengan multimeter:</span>
+      <label>daya terukur <input id="calMeasured" type="number" step="0.01" min="0" placeholder="mis. 4.0"> W</label>
+      <button id="btnCal" class="primary">Kalibrasi sekarang</button>
+      <button id="btnCalReset">Reset</button>
+    </div>
+    <div class="hint" id="calInfo">Belum dikalibrasi (faktor ×1,00).</div>
+    <div class="hint">⚠ ESTIMASI dari sensor cahaya (LDR) = daya puncak × cahaya × keselarasan × faktor kalibrasi. Bukan hasil pengukuran langsung tegangan/arus panel.</div>
+  </div>
+
+  <div class="card wide">
+    <h2>Kontrol Servo Realtime</h2>
+    <div style="text-align:center">
+      <div class="modes"><button id="btnAuto" class="active">AUTO (ikuti cahaya)</button><button id="btnManual">MANUAL (kontrol web)</button></div>
+    </div>
+    <div id="ctrlRow" class="ctrl-row dis">
+      <div><div id="pad"><div id="knob"></div></div><div class="hint">Geser joystick</div></div>
+      <div><div class="dpad">
+        <span></span><button data-d="up" aria-label="Atas">▲</button><span></span>
+        <button data-d="left" aria-label="Kiri">◀</button><button id="btnCenter" aria-label="Tengah" style="font-size:.8rem">⌖<br>tengah</button><button data-d="right" aria-label="Kanan">▶</button>
+        <span></span><button data-d="down" aria-label="Bawah">▼</button><span></span>
+      </div><div class="hint">Tombol panah / keyboard ← ↑ → ↓</div></div>
+      <div class="opts">
+        <label>Langkah <select id="step"><option value="1">1°</option><option value="2" selected>2°</option><option value="5">5°</option><option value="10">10°</option></select></label>
+        <label><input type="checkbox" id="invPan"> Balik arah PAN</label>
+        <label><input type="checkbox" id="invTilt"> Balik arah TILT</label>
+      </div>
+    </div>
+    <div class="hint" id="gpStatus">🎮 Controller: belum terdeteksi (hubungkan, lalu tekan tombol apa saja)</div>
+    <div class="hint">🎮 Stick = joystick • D-pad = tombol panah • A = tengah • Start = AUTO/MANUAL • LB/RB = kecilkan/besarkan langkah</div>
+    <div class="readout" id="readout">Mode AUTO: servo mengikuti cahaya. Pilih MANUAL untuk mengontrol dari sini.</div>
+  </div>
+
+  <div class="card wide"><h2>Intensitas Cahaya (nilai ADC 0–4095)</h2>
+    <div class="ldr-grid">
+      <div class="ldr"><b>Kiri-Atas (TL)</b><span id="tl">–</span><div class="bar"><i id="b_tl"></i></div></div>
+      <div class="ldr"><b>Kanan-Atas (TR)</b><span id="tr">–</span><div class="bar"><i id="b_tr"></i></div></div>
+      <div class="ldr"><b>Kiri-Bawah (BL)</b><span id="bl">–</span><div class="bar"><i id="b_bl"></i></div></div>
+      <div class="ldr"><b>Kanan-Bawah (BR)</b><span id="br">–</span><div class="bar"><i id="b_br"></i></div></div>
+    </div>
+  </div>
+  <div class="card wide"><h2>Grafik Cahaya (%) dan Estimasi Daya (W) – 40 data terakhir</h2><canvas id="chart"></canvas></div>
+
+  <div class="card wide">
+    <h2>Riwayat Pengukuran (tersimpan di Firebase)</h2>
+    <div class="hctl">
+      <label><input type="checkbox" id="autoSave" checked> Simpan otomatis</label>
+      <label>Setiap <select id="saveEvery"><option value="10">10 detik</option><option value="30" selected>30 detik</option><option value="60">1 menit</option><option value="300">5 menit</option></select></label>
+      <label>Tampilkan <select id="range"><option value="1">1 jam terakhir</option><option value="6">6 jam terakhir</option><option value="24" selected>24 jam terakhir</option><option value="168">7 hari terakhir</option></select></label>
+      <button id="btnCsv">⬇ Unduh CSV</button>
+      <button id="btnClear" class="danger">🗑 Hapus semua riwayat</button>
+    </div>
+    <div class="sub" id="histStatus">Riwayat disimpan selama halaman ini terbuka dan data ESP32 masuk.</div>
+    <div class="hstats">
+      <div><b id="hCount">–</b><span>Jumlah data</span></div>
+      <div><b id="hLight">–</b><span>Cahaya rata-rata (%)</span></div>
+      <div><b id="hAvgP">–</b><span>Daya estimasi rata-rata (W)</span></div>
+      <div><b id="hMaxP">–</b><span>Daya estimasi tertinggi (W)</span></div>
+      <div><b id="hEnergy">–</b><span>Energi estimasi (Wh)</span></div>
+    </div>
+    <canvas id="histChart" style="max-height:260px"></canvas>
+    <h2 style="margin-top:16px">20 data terbaru</h2>
+    <div class="tscroll"><table class="h"><thead><tr><th>Waktu</th><th>Cahaya %</th><th>Daya W</th><th>Selaras %</th><th>PAN°</th><th>TILT°</th><th>Mode</th><th>Status</th></tr></thead><tbody id="histBody"><tr><td colspan="8">Belum ada data riwayat.</td></tr></tbody></table></div>
+  </div>
+</main>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+  import { getDatabase, ref, onValue, update, set, remove, query, orderByKey, startAt, limitToLast } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+
+  // ====== GANTI DENGAN firebaseConfig MILIK ANDA (Firebase Console > Project settings > Your apps) ======
+  const firebaseConfig = {
+    apiKey: "ISI_API_KEY",
+    authDomain: "NAMA-PROJECT.firebaseapp.com",
+    databaseURL: "https://NAMA-PROJECT-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "NAMA-PROJECT",
+    appId: "ISI_APP_ID"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getDatabase(app);
+  const $ = (id) => document.getElementById(id);
+  const ctrlRef = ref(db, "solar/control");
+
+  // batas sudut (samakan dengan AZ_MIN/MAX dan EL_MIN/MAX di kode ESP32)
+  const AZ_MIN = 0, AZ_MAX = 180, EL_MIN = 0, EL_MAX = 90;
+  const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+
+  // ---------- status kontrol ----------
+  let mode = "auto";            // mode yang diinginkan (dikirim ke Firebase)
+  let tAz = 90, tEl = 45;       // sudut target (derajat)
+  let live = null, lastTs = 0, dirty = false, lastSent = 0;
+
+  try { $("invPan").checked = localStorage.getItem("invPan") === "1"; $("invTilt").checked = localStorage.getItem("invTilt") === "1"; } catch (e) {}
+  $("invPan").onchange = () => { try { localStorage.setItem("invPan", $("invPan").checked ? "1" : "0"); } catch (e) {} };
+  $("invTilt").onchange = () => { try { localStorage.setItem("invTilt", $("invTilt").checked ? "1" : "0"); } catch (e) {} };
+
+  function renderControl() {
+    const manual = mode === "manual";
+    $("btnAuto").classList.toggle("active", !manual);
+    $("btnManual").classList.toggle("active", manual);
+    $("ctrlRow").classList.toggle("dis", !manual);
+    const act = live ? `Aktual: PAN ${live.servo.az}° / TILT ${live.servo.el}°` : "Aktual: –";
+    $("readout").textContent = manual
+      ? `Target: PAN ${Math.round(tAz)}° / TILT ${Math.round(tEl)}°   |   ${act}`
+      : "Mode AUTO: servo mengikuti cahaya. Pilih MANUAL untuk mengontrol dari sini.";
+  }
+
+  function pushControl(force) {
+    const now = Date.now();
+    if (!force && (!dirty || now - lastSent < 100)) return;   // batasi maks 10 kirim/detik
+    dirty = false; lastSent = now;
+    update(ctrlRef, { mode, az: Math.round(tAz), el: Math.round(tEl) }).catch((e) => console.error("Gagal kirim kontrol:", e));
+  }
+  setInterval(() => pushControl(false), 60);
+
+  function setMode(m) {
+    if (m === "manual" && live) { tAz = live.servo.az; tEl = live.servo.el; }   // mulai dari posisi sekarang
+    mode = m; renderControl(); pushControl(true);
+  }
+  $("btnAuto").onclick = () => setMode("auto");
+  $("btnManual").onclick = () => setMode("manual");
+
+  function nudge(dx, dy) {            // dx: + = kanan, dy: + = atas (dalam derajat)
+    if (mode !== "manual") return;
+    const sp = $("invPan").checked ? -1 : 1, st = $("invTilt").checked ? -1 : 1;
+    tAz = clamp(tAz + dx * sp, AZ_MIN, AZ_MAX);
+    tEl = clamp(tEl + dy * st, EL_MIN, EL_MAX);
+    dirty = true; renderControl();
+  }
+  const stepDeg = () => Number($("step").value);
+
+  // ---------- tombol panah (tahan = berulang) ----------
+  const dirs = { up: [0, 1], down: [0, -1], left: [-1, 0], right: [1, 0] };
+  document.querySelectorAll(".dpad button[data-d]").forEach((b) => {
+    let timer = null;
+    const stop = () => { clearInterval(timer); timer = null; };
+    b.addEventListener("pointerdown", (e) => {
+      e.preventDefault(); const [dx, dy] = dirs[b.dataset.d];
+      nudge(dx * stepDeg(), dy * stepDeg());
+      stop(); timer = setInterval(() => nudge(dx * stepDeg(), dy * stepDeg()), 120);
+    });
+    ["pointerup", "pointerleave", "pointercancel"].forEach((ev) => b.addEventListener(ev, stop));
+  });
+  $("btnCenter").onclick = () => { if (mode !== "manual") return; tAz = 90; tEl = 45; dirty = true; renderControl(); };
+
+  window.addEventListener("keydown", (e) => {
+    const k = { ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left", ArrowRight: "right" }[e.key];
+    if (!k || mode !== "manual" || /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName)) return;
+    e.preventDefault(); const [dx, dy] = dirs[k]; nudge(dx * stepDeg(), dy * stepDeg());
+  });
+
+  // ---------- joystick virtual ----------
+  const pad = $("pad"), knob = $("knob");
+  let jx = 0, jy = 0, dragging = false;
+  function moveKnob(ev) {
+    const r = pad.getBoundingClientRect(), R = r.width / 2 - 30;
+    let x = ev.clientX - (r.left + r.width / 2), y = ev.clientY - (r.top + r.height / 2);
+    const d = Math.hypot(x, y); if (d > R) { x *= R / d; y *= R / d; }
+    knob.style.left = (r.width / 2 - 30 + x) + "px"; knob.style.top = (r.height / 2 - 30 + y) + "px";
+    jx = x / R; jy = -y / R;                     // jy positif = ke atas
+  }
+  pad.addEventListener("pointerdown", (e) => { dragging = true; pad.setPointerCapture(e.pointerId); moveKnob(e); });
+  pad.addEventListener("pointermove", (e) => { if (dragging) moveKnob(e); });
+  const release = () => { dragging = false; jx = jy = 0; knob.style.left = "55px"; knob.style.top = "55px"; };
+  pad.addEventListener("pointerup", release); pad.addEventListener("pointercancel", release);
+  setInterval(() => {                             // makin jauh digeser, makin cepat
+    if (!dragging || (Math.abs(jx) < 0.15 && Math.abs(jy) < 0.15)) return;
+    nudge(jx * stepDeg(), jy * stepDeg());
+  }, 100);
+
+  // ---------- gamepad / controller fisik (ROG, Xbox, dll.) ----------
+  const gpStatus = $("gpStatus");
+  const gpPrev = [], gpHold = {};
+  const dpad = { 12: [0, 1], 13: [0, -1], 14: [-1, 0], 15: [1, 0] };   // atas, bawah, kiri, kanan
+  const gpDown = (pad, i) => { const b = pad.buttons[i]; return !!b && (b.pressed || b.value > 0.6); };
+  function changeStep(dir) {
+    const sel = $("step"); sel.selectedIndex = clamp(sel.selectedIndex + dir, 0, sel.options.length - 1);
+  }
+  function pollGamepad() {
+    const pads = navigator.getGamepads ? Array.from(navigator.getGamepads()) : [];
+    const pad = pads.find((p) => p && p.connected);
+    if (!pad) { gpStatus.textContent = "🎮 Controller: belum terdeteksi (hubungkan, lalu tekan tombol apa saja)"; return; }
+    gpStatus.textContent = "🎮 Controller terhubung: " + pad.id.slice(0, 48);
+
+    // stick kiri atau kanan (dipilih yang lebih jauh digeser), dengan zona mati
+    const DZ = 0.18, sticks = [[pad.axes[0] || 0, pad.axes[1] || 0], [pad.axes[2] || 0, pad.axes[3] || 0]];
+    let [sx, sy] = sticks.sort((a, b) => Math.hypot(b[0], b[1]) - Math.hypot(a[0], a[1]))[0];
+    const mag = Math.hypot(sx, sy);
+    if (mag > DZ) {
+      const k = (mag - DZ) / (1 - DZ) / mag;       // skala 0..1 setelah zona mati
+      nudge(sx * k * stepDeg() * 0.5, -sy * k * stepDeg() * 0.5);   // sumbu Y stick: atas = negatif
+    }
+
+    // D-pad: tekan = geser, tahan = berulang
+    const now = Date.now();
+    for (const key in dpad) {
+      if (gpDown(pad, +key)) {
+        const [dx, dy] = dpad[key], h = gpHold[key];
+        if (!h) { nudge(dx * stepDeg(), dy * stepDeg()); gpHold[key] = { next: now + 300 }; }
+        else if (now >= h.next) { nudge(dx * stepDeg(), dy * stepDeg()); h.next = now + 120; }
+      } else delete gpHold[key];
+    }
+
+    // tombol sekali tekan
+    const edge = (i) => { const d = gpDown(pad, i), r = d && !gpPrev[i]; gpPrev[i] = d; return r; };
+    if (edge(9)) setMode(mode === "manual" ? "auto" : "manual");                                  // Start
+    if (edge(0) && mode === "manual") { tAz = 90; tEl = 45; dirty = true; renderControl(); }     // A = tengah
+    if (edge(4)) changeStep(-1);                                                                  // LB
+    if (edge(5)) changeStep(+1);                                                                  // RB
+  }
+  setInterval(pollGamepad, 50);
+
+  // ---------- sinkron mode dari Firebase (jika dibuka di perangkat lain) ----------
+  let firstCtrl = true;
+  onValue(ctrlRef, (snap) => {
+    const v = snap.val(); if (!v) { renderControl(); return; }
+    if (firstCtrl) { if (typeof v.az === "number") tAz = v.az; if (typeof v.el === "number") tEl = v.el; firstCtrl = false; }
+    if (v.mode && v.mode !== mode && Date.now() - lastSent > 800) { mode = v.mode; if (mode === "manual" && typeof v.az === "number") { tAz = v.az; tEl = v.el; } }
+    renderControl();
+  });
+
+  // ---------- data live dari ESP32 ----------
+  const chart = new Chart($("chart"), {
+    type: "line",
+    data: { labels: [], datasets: [
+      { label: "Cahaya (%)", data: [], borderColor: "#1e8449", backgroundColor: "rgba(30,132,73,.12)", fill: true, tension: .3, pointRadius: 2, yAxisID: "y" },
+      { label: "Daya estimasi (W)", data: [], borderColor: "#d68910", backgroundColor: "rgba(214,137,16,.0)", tension: .3, pointRadius: 2, yAxisID: "y1" }
+    ] },
+    options: { animation: false,
+      scales: { y: { beginAtZero: true, max: 100, title: { display: true, text: "Cahaya (%)" } },
+                y1: { beginAtZero: true, position: "right", grid: { drawOnChartArea: false }, title: { display: true, text: "Daya estimasi (W)" } } },
+      plugins: { legend: { display: true } } }
+  });
+  const fmtUptime = (s) => `${Math.floor(s / 3600)}j ${Math.floor(s % 3600 / 60)}m ${s % 60}d`;
+
+  onValue(ref(db, "solar/live"), (snap) => {
+    const d = snap.val(); if (!d) return;
+    live = d; lastTs = d.ts || Date.now();
+    maybeSave(d);
+    $("light").textContent = d.light; $("b_light").style.width = d.light + "%";
+    if (typeof d.pest === "number") {
+      recentRaw.push(d.pest); if (recentRaw.length > 6) recentRaw.shift();
+      const k = kf(), pc = d.pest * k, pk = d.wp * k;
+      $("pest").textContent = pc.toFixed(2); $("pmax").textContent = "dari puncak " + pk.toFixed(1) + " W" + (k !== 1 ? " (terkalibrasi)" : "");
+      $("b_pest").style.width = Math.min(100, pk > 0 ? pc / pk * 100 : 0) + "%";
+      $("align").textContent = d.align; $("b_align").style.width = d.align + "%";
+      $("ewh").textContent = (d.ewh * k).toFixed(3);
+    }
+    $("status2").textContent = d.status;
+    $("status2").style.color = d.status === "Seimbang" ? "var(--accent)" : "var(--warn)";
+    $("diff").textContent = `Selisih atas-bawah ${d.dv} | kiri-kanan ${d.dh}`;
+    $("az").textContent = d.servo.az; $("el").textContent = d.servo.el;
+    $("rssi").textContent = d.rssi; $("uptime").textContent = "Uptime " + fmtUptime(d.uptime);
+    $("last").textContent = "Update terakhir " + new Date(lastTs).toLocaleTimeString("id-ID");
+    for (const k of ["tl", "tr", "bl", "br"]) { $(k).textContent = d.ldr[k]; $("b_" + k).style.width = (d.ldr[k] / 4095 * 100) + "%"; }
+    $("modeBadge").textContent = "Mode " + (d.mode === "manual" ? "MANUAL" : "AUTO");
+    $("modeBadge").className = "badge " + (d.mode === "manual" ? "man" : "on");
+    renderControl();
+    chart.data.labels.push(new Date(lastTs).toLocaleTimeString("id-ID"));
+    chart.data.datasets[0].data.push(d.light);
+    chart.data.datasets[1].data.push(typeof d.pest === "number" ? d.pest * kf() : null);
+    if (chart.data.labels.length > 40) { chart.data.labels.shift(); chart.data.datasets.forEach((ds) => ds.data.shift()); }
+    chart.update();
+  });
+
+  // ================== KALIBRASI DAYA DENGAN MULTIMETER ==================
+  // Estimasi mentah dari ESP32 dikalikan faktor = daya terukur multimeter / estimasi mentah (saat kalibrasi).
+  // Faktor disimpan di Firebase (solar/calibration) sehingga semua perangkat memakai angka yang sama.
+  let calib = { factor: 1, measured: null, raw: null, ts: null };
+  const recentRaw = [];
+  const kf = () => (typeof calib.factor === "number" && calib.factor > 0 ? calib.factor : 1);
+  const calRef = ref(db, "solar/calibration");
+  function renderCalib() {
+    const k = kf();
+    $("powTitle").textContent = k !== 1 ? "Estimasi Daya Masuk (terkalibrasi multimeter)" : "Estimasi Daya Masuk dari Panel Surya";
+    $("calInfo").textContent = k === 1 ? "Belum dikalibrasi (faktor ×1,00)."
+      : `Faktor kalibrasi ×${k.toFixed(2).replace(".", ",")} — diukur ${Number(calib.measured).toFixed(2)} W saat estimasi mentah ${Number(calib.raw).toFixed(2)} W` +
+        (calib.ts ? " (" + new Date(calib.ts).toLocaleString("id-ID") + ")" : "") + ".";
+    if (live && typeof live.pest === "number") {      // segarkan angka di layar
+      const pc = live.pest * k, pk = live.wp * k;
+      $("pest").textContent = pc.toFixed(2); $("pmax").textContent = "dari puncak " + pk.toFixed(1) + " W" + (k !== 1 ? " (terkalibrasi)" : "");
+      $("b_pest").style.width = Math.min(100, pk > 0 ? pc / pk * 100 : 0) + "%"; $("ewh").textContent = (live.ewh * k).toFixed(3);
+    }
+    if (typeof renderHistory === "function") renderHistory();
+  }
+  onValue(calRef, (snap) => { const v = snap.val(); calib = v && typeof v.factor === "number" ? v : { factor: 1, measured: null, raw: null, ts: null }; renderCalib(); });
+  $("btnCal").onclick = () => {
+    const measured = parseFloat($("calMeasured").value);
+    if (!(measured > 0)) { alert("Isi daya terukur multimeter (W), misalnya 4.0"); return; }
+    if (recentRaw.length < 3) { alert("Data ESP32 belum cukup. Tunggu beberapa detik sampai status ONLINE lalu coba lagi."); return; }
+    const raw = recentRaw.reduce((a, b) => a + b, 0) / recentRaw.length;
+    if (raw < 0.05) { alert("Estimasi mentah terlalu kecil (cahaya redup). Kalibrasi saat panel/sensor terkena cahaya terang, bersamaan dengan pengukuran multimeter."); return; }
+    const factor = Math.min(20, Math.max(0.2, measured / raw));
+    set(calRef, { factor, measured, raw, ts: Date.now() }).catch((e) => alert("Gagal menyimpan kalibrasi: " + e.message));
+  };
+  $("btnCalReset").onclick = () => { if (confirm("Kembalikan faktor kalibrasi ke ×1,00?")) set(calRef, { factor: 1, measured: null, raw: null, ts: Date.now() }); };
+
+  // ================== RIWAYAT PENGUKURAN (Firebase: solar/history) ==================
+  // Catatan: riwayat ditulis oleh website ini saat terbuka (ESP32 tidak diubah).
+  // Kunci data = waktu server dibulatkan ke interval simpan, jadi beberapa perangkat yang membuka
+  // dashboard bersamaan tidak membuat data ganda.
+  const numOrNull = (v) => (typeof v === "number" && isFinite(v) ? v : null);
+  let lastBucket = 0;
+  try {
+    $("autoSave").checked = localStorage.getItem("autoSave") !== "0";
+    const ev = localStorage.getItem("saveEvery"); if (ev) $("saveEvery").value = ev;
+    const rg = localStorage.getItem("histRange"); if (rg) $("range").value = rg;
+  } catch (e) {}
+  $("autoSave").onchange = () => { try { localStorage.setItem("autoSave", $("autoSave").checked ? "1" : "0"); } catch (e) {} };
+  $("saveEvery").onchange = () => { lastBucket = 0; try { localStorage.setItem("saveEvery", $("saveEvery").value); } catch (e) {} };
+
+  function maybeSave(d) {
+    if (!$("autoSave").checked || typeof d.ts !== "number") return;
+    const every = Number($("saveEvery").value) * 1000;
+    const bucket = Math.floor(d.ts / every) * every;
+    if (bucket === lastBucket) return;
+    lastBucket = bucket;
+    const rec = {
+      ts: d.ts, light: numOrNull(d.light), align: numOrNull(d.align), pest: numOrNull(d.pest), ewh: numOrNull(d.ewh),
+      az: numOrNull(d.servo && d.servo.az), el: numOrNull(d.servo && d.servo.el),
+      mode: String(d.mode || ""), status: String(d.status || ""),
+      tl: numOrNull(d.ldr && d.ldr.tl), tr: numOrNull(d.ldr && d.ldr.tr), bl: numOrNull(d.ldr && d.ldr.bl), br: numOrNull(d.ldr && d.ldr.br),
+      rssi: numOrNull(d.rssi)
+    };
+    set(ref(db, "solar/history/" + bucket), rec)
+      .then(() => { $("histStatus").textContent = "Tersimpan: " + new Date(d.ts).toLocaleString("id-ID"); })
+      .catch((e) => { $("histStatus").textContent = "Gagal menyimpan riwayat: " + e.message; });
+  }
+
+  let histRecords = [], unsubHist = null;
+  const histChart = new Chart($("histChart"), {
+    type: "line",
+    data: { labels: [], datasets: [
+      { label: "Cahaya (%)", data: [], borderColor: "#1e8449", backgroundColor: "rgba(30,132,73,.12)", fill: true, tension: .25, pointRadius: 0, yAxisID: "y" },
+      { label: "Daya estimasi (W)", data: [], borderColor: "#d68910", tension: .25, pointRadius: 0, yAxisID: "y1" }
+    ] },
+    options: { animation: false, interaction: { mode: "index", intersect: false },
+      scales: { y: { beginAtZero: true, max: 100, title: { display: true, text: "Cahaya (%)" } },
+                y1: { beginAtZero: true, position: "right", grid: { drawOnChartArea: false }, title: { display: true, text: "Daya estimasi (W)" } } },
+      plugins: { legend: { display: true } } }
+  });
+
+  function subscribeHistory() {
+    if (unsubHist) unsubHist();
+    const hours = Number($("range").value);
+    const from = Date.now() - hours * 3600e3;
+    const q = query(ref(db, "solar/history"), orderByKey(), startAt(String(from)), limitToLast(1500));
+    unsubHist = onValue(q, (snap) => {
+      const arr = [];
+      snap.forEach((ch) => { const v = ch.val(); if (v && typeof v.ts === "number") arr.push(v); });
+      arr.sort((a, b) => a.ts - b.ts);
+      histRecords = arr; renderHistory();
+    }, (err) => { $("histStatus").textContent = "Gagal membaca riwayat: " + err.message; });
+  }
+  $("range").onchange = () => { try { localStorage.setItem("histRange", $("range").value); } catch (e) {} subscribeHistory(); };
+
+  const f1 = (v, n = 1) => (typeof v === "number" ? v.toFixed(n) : "–");
+  function renderHistory() {
+    const kcal = kf();
+    const r = histRecords.map((x) => (typeof x.pest === "number" ? Object.assign({}, x, { pest: x.pest * kcal }) : x)), n = r.length;
+    $("hCount").textContent = n;
+    if (!n) {
+      ["hLight", "hAvgP", "hMaxP", "hEnergy"].forEach((id) => ($(id).textContent = "–"));
+      $("histBody").innerHTML = '<tr><td colspan="8">Belum ada data riwayat pada rentang ini.</td></tr>';
+      histChart.data.labels = []; histChart.data.datasets.forEach((ds) => (ds.data = [])); histChart.update(); return;
+    }
+    const mean = (k) => { const v = r.map((x) => x[k]).filter((x) => typeof x === "number"); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
+    $("hLight").textContent = f1(mean("light")); $("hAvgP").textContent = f1(mean("pest"), 2);
+    $("hMaxP").textContent = f1(Math.max(...r.map((x) => (typeof x.pest === "number" ? x.pest : 0))), 2);
+    // energi = integrasi daya estimasi terhadap waktu (celah > 10 menit tidak dihitung)
+    let wh = 0;
+    for (let i = 1; i < n; i++) {
+      const dt = r[i].ts - r[i - 1].ts;
+      if (dt > 0 && dt <= 600000 && typeof r[i - 1].pest === "number") wh += r[i - 1].pest * dt / 3600000;
+    }
+    $("hEnergy").textContent = wh.toFixed(3);
+
+    const long = Number($("range").value) > 24;
+    const fmt = (t) => new Date(t).toLocaleString("id-ID", long ? { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" } : { hour: "2-digit", minute: "2-digit" });
+    const k = Math.ceil(n / 400);                                    // kurangi titik agar grafik ringan
+    const pts = r.filter((_, i) => i % k === 0);
+    histChart.data.labels = pts.map((x) => fmt(x.ts));
+    histChart.data.datasets[0].data = pts.map((x) => x.light);
+    histChart.data.datasets[1].data = pts.map((x) => x.pest);
+    histChart.update();
+
+    $("histBody").innerHTML = r.slice(-20).reverse().map((x) =>
+      `<tr><td>${new Date(x.ts).toLocaleString("id-ID")}</td><td>${f1(x.light, 0)}</td><td>${f1(x.pest, 2)}</td><td>${f1(x.align, 0)}</td><td>${f1(x.az, 0)}</td><td>${f1(x.el, 0)}</td><td>${x.mode || "–"}</td><td>${x.status || "–"}</td></tr>`).join("");
+  }
+
+  $("btnCsv").onclick = () => {
+    if (!histRecords.length) { alert("Belum ada data untuk diunduh."); return; }
+    const cols = ["ts", "waktu", "light", "align", "pest_mentah", "pest_terkalibrasi", "faktor", "ewh_mentah", "az", "el", "mode", "status", "tl", "tr", "bl", "br", "rssi"];
+    const rows = histRecords.map((x) => cols.map((c) => {
+      if (c === "waktu") return new Date(x.ts).toISOString();
+      if (c === "pest_mentah") return x.pest ?? "";
+      if (c === "pest_terkalibrasi") return typeof x.pest === "number" ? (x.pest * kf()).toFixed(3) : "";
+      if (c === "faktor") return kf().toFixed(3);
+      if (c === "ewh_mentah") return x.ewh ?? "";
+      return x[c] ?? "";
+    }).join(","));
+    const blob = new Blob([cols.join(",") + "\n" + rows.join("\n")], { type: "text/csv" });
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+    a.download = "riwayat_solar_tracker.csv"; document.body.appendChild(a); a.click(); a.remove();
+  };
+  $("btnClear").onclick = () => {
+    if (!confirm("Hapus SEMUA riwayat pengukuran di Firebase?\nTindakan ini tidak dapat dibatalkan.")) return;
+    remove(ref(db, "solar/history")).then(() => { $("histStatus").textContent = "Riwayat dihapus."; }).catch((e) => alert("Gagal menghapus: " + e.message));
+  };
+  subscribeHistory();
+
+  setInterval(() => {
+    const online = lastTs && (Date.now() - lastTs) < 20000;
+    $("status").textContent = lastTs ? (online ? "ONLINE" : "OFFLINE") : "Menunggu data…";
+    $("status").className = "badge " + (lastTs ? (online ? "on" : "off") : "");
+  }, 2000);
+  renderControl();
+</script>
+</body>
+</html>
